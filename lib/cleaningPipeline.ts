@@ -8,6 +8,14 @@ import {
 import type { ColumnMapping } from '@/types'
 
 const BATCH_SIZE = 25
+
+/** Strip markdown code fences from Claude's response */
+function extractJSON(text: string): string {
+  // Remove ```json ... ``` or ``` ... ```
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenced) return fenced[1].trim()
+  return text.trim()
+}
 const MODEL_MAP: Record<string, string> = {
   haiku_primary: 'claude-haiku-4-5-20251001',
   sonnet_primary: 'claude-sonnet-4-5-20250514',
@@ -65,7 +73,7 @@ async function preScan(
     .eq('id', jobId)
 
   try {
-    const parsed = JSON.parse(text)
+    const parsed = JSON.parse(extractJSON(text))
     return parsed.cleaning_rules ?? []
   } catch {
     return ['Clean and standardise all fields using proper casing and formatting.']
@@ -107,7 +115,7 @@ async function cleanBatch(
   })
 
   try {
-    return JSON.parse(text)
+    return JSON.parse(extractJSON(text))
   } catch {
     return rows.map(() => ({}))
   }
@@ -200,14 +208,15 @@ export async function runCleaningPipeline(input: PipelineInput) {
       // Update each row with cleaned data
       for (let i = 0; i < batch.length; i++) {
         const rowIndex = startIndex + i
-        const cleanedRow = cleaned[i] ?? {}
+        const cleanedRow = cleaned[i]
+        const hasData = cleanedRow && typeof cleanedRow === 'object'
 
         await supabase
           .from('lead_rows')
           .update({
-            cleaned_data: cleanedRow,
-            status: Object.keys(cleanedRow).length > 0 ? 'done' : 'error',
-            error_msg: Object.keys(cleanedRow).length > 0 ? null : 'Empty response from AI',
+            cleaned_data: hasData ? cleanedRow : {},
+            status: hasData ? 'done' : 'error',
+            error_msg: hasData ? null : 'No cleaned data returned for this row',
           })
           .eq('job_id', jobId)
           .eq('row_index', rowIndex)
@@ -246,11 +255,13 @@ export async function runCleaningPipeline(input: PipelineInput) {
         .eq('id', jobId)
     }
   } catch (err) {
-    console.error('Pipeline error:', err)
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Pipeline error:', message)
     await supabase
       .from('cleaning_jobs')
       .update({
         status: 'failed',
+        error_message: message,
       })
       .eq('id', jobId)
   }

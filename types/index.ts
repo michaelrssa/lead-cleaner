@@ -51,6 +51,7 @@ export interface CleaningJob {
   model_strategy: string
   column_mapping: Record<string, string> | null
   original_filename: string | null
+  error_message: string | null
 }
 
 export interface ApiUsageLog {
@@ -113,6 +114,7 @@ export interface CleaningJobUpdate {
   model_strategy?: string
   column_mapping?: Record<string, string> | null
   original_filename?: string | null
+  error_message?: string | null
 }
 
 export interface ApiUsageLogUpdate {

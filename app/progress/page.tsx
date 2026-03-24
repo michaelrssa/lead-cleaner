@@ -9,6 +9,7 @@ export default function ProgressPage() {
   const router = useRouter()
   const [job, setJob] = useState<CleaningJob | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
 
   const jobId = typeof window !== 'undefined' ? localStorage.getItem('lc_job_id') : null
 
@@ -51,6 +52,47 @@ export default function ProgressPage() {
       body: JSON.stringify({ jobId }),
     })
     fetchStatus()
+  }
+
+  const handleRetry = async () => {
+    const rawParsed = localStorage.getItem('lc_parsed')
+    const rawMapping = localStorage.getItem('lc_mapping')
+    if (!rawParsed || !rawMapping) {
+      router.push('/')
+      return
+    }
+    setRetrying(true)
+    try {
+      const parsed = JSON.parse(rawParsed)
+      const mapping = JSON.parse(rawMapping)
+      const activeMappings = Object.entries(mapping).filter(
+        ([, t]) => t !== 'Ignore this column',
+      )
+      const res = await fetch('/api/jobs/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: parsed.filename,
+          totalRows: parsed.totalRows,
+          columnMapping: Object.fromEntries(activeMappings),
+          modelStrategy: job?.model_strategy || 'haiku_primary',
+          budgetCapUsd: job?.budget_cap_usd || 20,
+          estimatedCostUsd: job?.estimated_cost_usd || 0,
+          rows: parsed.rows,
+          headers: parsed.headers,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to create job')
+      const data = await res.json()
+      localStorage.setItem('lc_job_id', data.jobId)
+      setJob(null)
+      setError(null)
+      // Force re-fetch with new job ID
+      window.location.reload()
+    } catch (err) {
+      setError((err as Error).message)
+      setRetrying(false)
+    }
   }
 
   if (!jobId) {
@@ -123,6 +165,14 @@ export default function ProgressPage() {
               </span>
               <span>{progress}%</span>
             </div>
+
+            {/* Error message */}
+            {job.status === 'failed' && job.error_message && (
+              <div className="mt-4 rounded-lg border border-red-800/50 bg-red-900/20 px-4 py-3 text-sm text-red-400">
+                <p className="font-medium mb-1">Error</p>
+                <p className="text-xs text-red-400/80 font-mono break-all">{job.error_message}</p>
+              </div>
+            )}
           </div>
 
           {/* Cost tracking */}
@@ -168,12 +218,21 @@ export default function ProgressPage() {
               </button>
             )}
             {(job.status === 'failed' || job.status === 'cancelled') && (
-              <button
-                onClick={() => router.push('/')}
-                className="btn-secondary"
-              >
-                Start Over
-              </button>
+              <>
+                <button
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="btn-primary"
+                >
+                  {retrying ? 'Retrying...' : 'Retry Job'}
+                </button>
+                <button
+                  onClick={() => router.push('/')}
+                  className="btn-secondary"
+                >
+                  Start Over
+                </button>
+              </>
             )}
           </div>
         </div>
