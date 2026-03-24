@@ -58,6 +58,8 @@ export default function ReviewPage() {
           modelStrategy: strategy,
           budgetCapUsd: budgetNum,
           estimatedCostUsd: cost.totalCost,
+          rows: parsed.rows,
+          headers: parsed.headers,
         }),
       })
       if (!res.ok) throw new Error('Failed to create job')
