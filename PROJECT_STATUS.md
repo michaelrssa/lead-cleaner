@@ -14,74 +14,97 @@
 - `.env.local` populated with all 4 keys (Anthropic, Supabase URL, anon key, service role key)
 - `.gitignore` covers .env*.local, node_modules, .xlsx, .claude/
 - `CONVENTIONS.md` documents patterns adapted from hvs-app
+- Dark zinc/slate UI theme for internal business tool
 
-### Pages (placeholder stubs)
-- `/` (home) — `app/page.tsx`
-- `/map` — `app/map/page.tsx`
-- `/review` — `app/review/page.tsx`
-- `/progress` — `app/progress/page.tsx`
-- `/results` — `app/results/page.tsx`
-- `/settings` — `app/settings/page.tsx`
+### Working Features (full flow tested end-to-end)
+1. **File Upload** (`app/page.tsx`) — Drag-drop or click to upload CSV/XLSX, preview first 5 rows
+2. **File Parsing** (`lib/fileParser.ts`) — CSV via papaparse, XLSX via xlsx lib, handles merged cells, empty rows, whitespace
+3. **Column Mapping** (`app/map/page.tsx`) — Map columns to target fields (First Name, Last Name, Email, etc.), auto-suggest from header names, ignore columns
+4. **Cost Estimation** (`app/review/page.tsx`) — Real cost calculator based on Claude token pricing, model strategy selector (Haiku/Sonnet), budget cap input
+5. **AI Cleaning Pipeline** (`lib/cleaningPipeline.ts`):
+   - Pre-scan: sends 10 sample rows to identify patterns (e.g. abbreviated names)
+   - Batch processing: cleans rows in groups of 25
+   - ALL columns sent as context (including ignored ones) — only mapped fields output
+   - Strips markdown fences from Claude JSON responses
+   - Budget cap enforcement, cancellation support
+6. **Progress Tracking** (`app/progress/page.tsx`) — Polls every 2s, progress bar, cost tracking, error display, retry button, cancel button
+7. **Results & Export** (`app/results/page.tsx`) — Cleaned data table, CSV download, error count
 
-### API Routes (placeholder stubs)
-- `POST /api/jobs/create` — `app/api/jobs/create/route.ts`
-- `POST /api/jobs/submit` — `app/api/jobs/submit/route.ts`
-- `GET /api/jobs/status` — `app/api/jobs/status/route.ts`
-- `GET /api/jobs/results` — `app/api/jobs/results/route.ts`
-- `POST /api/jobs/cancel` — `app/api/jobs/cancel/route.ts`
+### API Routes (all wired up)
+- `POST /api/jobs/create` — Creates job, inserts rows, fires pipeline
+- `GET /api/jobs/status?jobId=` — Returns job status for polling
+- `GET /api/jobs/results?jobId=` — Returns all lead rows for a job
+- `POST /api/jobs/cancel` — Cancels a running job
+- `POST /api/jobs/submit` — Placeholder (not yet used)
 
-### Supabase Schema (migration applied)
-- `cleaning_jobs` — main job table with status, costs, batch tracking
-- `api_usage_log` — per-call token/cost tracking, FK to cleaning_jobs
-- `monthly_spend` — monthly budget caps and spend totals
-- RLS enabled on all tables (service-role full access policies)
-- Indexes on `cleaning_jobs.status` and `api_usage_log.job_id`
-- Realtime enabled on `cleaning_jobs`
-- Migration file: `supabase/migrations/001_initial_schema.sql`
+### Supabase Schema (4 tables, all migrations applied)
+- `cleaning_jobs` — Job metadata, status, costs, budget, error_message
+- `lead_rows` — Raw + cleaned data per row, per job
+- `api_usage_log` — Per-call token/cost tracking
+- `monthly_spend` — Monthly budget caps
+- RLS enabled on all tables, indexes on key columns
+- Realtime enabled on cleaning_jobs
+- Migrations: 001 (initial), 002 (lead_rows), 003 (error_message)
 
-### Typed Client
-- `lib/supabase.ts` — `createSupabaseBrowser()` and `createSupabaseServer()` with `Database` generic
-- `lib/anthropic.ts` — server-only Anthropic client
-- `lib/costCalculator.ts` — placeholder cost estimator
-- `types/index.ts` — `CleaningJob`, `ApiUsageLog`, `MonthlySpend`, `Database` types
-
-### Dependencies
-- @supabase/supabase-js, @supabase/ssr
-- @anthropic-ai/sdk
-- papaparse, @types/papaparse, xlsx
+### Lib Modules
+- `lib/supabase.ts` — Browser + server Supabase clients
+- `lib/anthropic.ts` — Server-only Anthropic client
+- `lib/fileParser.ts` — CSV/XLSX parsing with header cleaning
+- `lib/autoMapper.ts` — Pattern-based column name auto-suggestion
+- `lib/costCalculator.ts` — Token cost estimation (Haiku + Sonnet pricing)
+- `lib/promptBuilder.ts` — System prompts for pre-scan and batch cleaning
+- `lib/cleaningPipeline.ts` — Full cleaning pipeline with pre-scan, batching, cost tracking
 
 ### Git History
-1. `231c751` — initial scaffold: lead cleaner app
-2. `58b8a59` — feat: supabase schema and typed client
+1. `7ac4100` — Initial commit from Create Next App
+2. `231c751` — initial scaffold: lead cleaner app
+3. `58b8a59` — feat: supabase schema and typed client
+4. `6419fa2` — feat: file upload, parsing and column mapping
+5. `ce433c0` — feat: review page with cost estimation
+6. `dd776b8` — feat: AI cleaning pipeline with pre-scan and batch processing
+7. `e89f391` — fix: error display, retry button, and JSON parsing
 
-## Not Yet Built
+## Known Issues / Refinements Needed
 
-### Core Features (in likely build order)
-1. **File upload + parsing** — Home page UI to upload CSV/XLSX, parse with papaparse/xlsx, preview rows
-2. **Column mapping** — Map page UI to match uploaded columns to expected fields
-3. **Cost estimation** — Calculate estimated API cost before submitting, enforce budget caps
-4. **Job creation API** — Wire up POST /api/jobs/create to insert into cleaning_jobs
-5. **AI cleaning pipeline** — Anthropic batch API integration, prompt engineering for lead cleaning
-6. **Job submission + processing** — Submit jobs, track progress via api_usage_log
-7. **Realtime progress** — Subscribe to cleaning_jobs changes on /progress page
-8. **Results display + export** — Show cleaned data, download as CSV/XLSX
-9. **Settings page** — Configure budget caps, model strategy, monthly limits
-10. **Job cancellation** — Cancel in-progress jobs
+### Bugs to Fix
+- Supabase typed client dropped (using untyped) — `@supabase/supabase-js` v2.100 requires `Relationships` key in generic shape, needs proper typed generation
+- No validation that localStorage data hasn't expired or been cleared between pages
 
-### Infrastructure (not yet set up)
-- No authentication (no user accounts yet)
-- Supabase MCP not connected
-- Vercel MCP not connected
-- gh CLI not installed (pushes done via token-in-URL)
+### Features to Build
+1. **Settings page** (`/settings`) — Configure budget caps, model strategy, monthly limits (currently placeholder)
+2. **Monthly spend tracking** — Increment `monthly_spend` table on each job, enforce monthly cap
+3. **XLSX export** — Currently only CSV download, add Excel export option
+4. **Job history** — List of past jobs with status, cost, ability to re-view results
+5. **Better error handling per row** — Show which specific rows errored and why
+6. **Comparison view** — Side-by-side raw vs cleaned data
+7. **Bulk file support** — Handle larger files (1000+ rows) with progress chunking
+8. **Authentication** — User accounts if this becomes multi-user
+
+### UX Improvements
+- Loading states between page transitions
+- Confirmation dialog before submitting expensive jobs
+- Toast notifications for success/error
+- Mobile responsive layout
+- Show pre-scan findings to user before cleaning starts
+
+### Infrastructure
+- No authentication (single user for now)
+- No Vercel deployment yet
 - No CI/CD pipeline
 - No tests
+- gh CLI not installed (pushes done via token-in-URL)
 
 ## Key Decisions Made
-- **Model strategy default**: `haiku_primary` — use Haiku as primary model for cost efficiency
-- **Budget default**: $20/month cap in monthly_spend table
-- **RLS approach**: Service-role-only policies (no user auth yet, all access server-side)
-- **Supabase client pattern**: Two functions (browser + server) following hvs-app conventions
-- **No src/ directory**: Files at project root per Next.js convention
+- **Model strategy default**: `haiku_primary` — Haiku for cost efficiency
+- **Budget default**: $20/month cap
+- **Batch size**: 25 rows per API call
+- **Pre-scan**: 10 sample rows analysed before cleaning
+- **Context columns**: ALL columns (including ignored) sent to Claude for inference
+- **RLS approach**: Service-role-only policies (no user auth)
+- **Untyped Supabase client**: Dropped Database generic due to type resolution issues
+- **Dark theme**: zinc/slate Tailwind palette for internal business tool
+- **localStorage for state**: Parsed data and mapping stored in localStorage between pages
 
 ## Data File
 - `MS Leads Jan23 to Aug25.xlsx` (1MB) is in the working directory but gitignored
+- Successfully tested with 15-row subset — cleaning pipeline works end-to-end
