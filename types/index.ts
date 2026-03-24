@@ -1,4 +1,32 @@
-/** Supabase Database types for the lead cleaner application */
+/** Types for the lead cleaner application */
+
+// ── File parsing types ──────────────────────────────────────
+
+export interface ParsedFile {
+  headers: string[]
+  rows: Record<string, string>[]
+  filename: string
+  totalRows: number
+}
+
+export const MAPPING_TARGETS = [
+  'First Name',
+  'Last Name',
+  'Full Name / Booking Name',
+  'Company Name',
+  'Title/Salutation',
+  'Phone/Cell',
+  'Email',
+  'Date of Birth',
+  'ID Number',
+  'Ignore this column',
+] as const
+
+export type MappingTarget = (typeof MAPPING_TARGETS)[number]
+
+export type ColumnMapping = Record<string, MappingTarget>
+
+// ── Supabase Database types ─────────────────────────────────
 
 // ── Row types (match the database columns) ──────────────────
 
