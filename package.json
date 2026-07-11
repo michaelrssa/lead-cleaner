@@ -9,9 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.110.0",
+    "@anthropic-ai/sdk": "^0.111.0",
     "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.100.0",
+    "@supabase/supabase-js": "^2.110.2",
     "next": "^16.2.10",
     "papaparse": "^5.5.4",
     "react": "^19.2.7",
@@ -23,7 +23,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "eslint": "^9.39.4",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.10",
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.1",
